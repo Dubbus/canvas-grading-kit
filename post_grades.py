@@ -6,6 +6,9 @@ Dry run by default: prints what would be sent and changes nothing.
 
     python3 post_grades.py <assignment_dir> --student Doe_Jane_1234567           # dry run
     python3 post_grades.py <assignment_dir> --student Doe_Jane_1234567 --send    # really post
+    python3 post_grades.py <assignment_dir> --approved                            # every row marked approved
+
+Mark a row approved by putting y / yes / x / 1 / true in an `approved` column of _drafts.csv.
 
 Safety:
   * Fetches the student's live rubric assessment first and re-sends every existing criterion's
@@ -37,6 +40,13 @@ def draft_points(row, criteria):
     return out
 
 
+APPROVED = {"y", "yes", "x", "1", "true"}
+
+
+def is_approved(row):
+    return (row.get("approved") or "").strip().lower() in APPROVED
+
+
 def rating_for(criterion, points):
     return next((r["id"] for r in criterion.get("ratings") or [] if float(r["points"]) == points), None)
 
@@ -44,7 +54,9 @@ def rating_for(criterion, points):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("assignment_dir", type=Path)
-    ap.add_argument("--student", action="append", required=True, help="folder name from _drafts.csv (repeatable)")
+    ap.add_argument("--student", action="append", default=[], help="folder name from _drafts.csv (repeatable)")
+    ap.add_argument("--approved", action="store_true", help="post every row whose `approved` column is y/yes/x/1/true")
+    ap.add_argument("--drafts", type=Path, help="drafts CSV (default: <assignment_dir>/_drafts.csv)")
     ap.add_argument("--send", action="store_true", help="actually post (default: dry run)")
     ap.add_argument("--overwrite", action="store_true", help="allow changing criteria that already have a different score")
     args = ap.parse_args()
@@ -54,14 +66,21 @@ def main():
     assignment_id = int(d.name.split("_")[0])
     criteria = json.loads((d / "rubric.json").read_text())["criteria"]
     by_id = {c["id"]: c for c in criteria}
-    drafts = {r["folder"]: r for r in csv.DictReader(open(d / "_drafts.csv", encoding="utf-8"))}
+    drafts_path = args.drafts or d / "_drafts.csv"
+    drafts = {r["folder"]: r for r in csv.DictReader(open(drafts_path, encoding="utf-8"))}
+    students = list(args.student)
+    if args.approved:
+        students += [k for k, r in drafts.items() if is_approved(r) and k not in students]
+    if not students:
+        sys.exit("Nothing selected. Pass --student <folder> or mark rows approved and pass --approved.")
+    print(f"{len(students)} student(s) selected from {drafts_path.name}" + ("" if args.send else "  [DRY RUN]"))
 
     api = Canvas(*get_config())
     sub_path = f"/courses/{course_id}/assignments/{assignment_id}/submissions"
 
-    for folder in args.student:
+    for folder in students:
         if folder not in drafts:
-            sys.exit(f"{folder} not in _drafts.csv")
+            sys.exit(f"{folder} not in {drafts_path.name}")
         user_id = folder.rsplit("_", 1)[1]
         live = api.get(f"{sub_path}/{user_id}", **{"include[]": ["rubric_assessment"]})
         before = live.get("rubric_assessment") or {}
