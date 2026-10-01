@@ -38,7 +38,8 @@ it can do anything you can do in Canvas. `setup` saves it to `.env` (owner-only 
 | Command | Underlying script | What it does |
 |---|---|---|
 | `grade.py download` | `canvas_submissions.py` | Saves every submission, `rubric.md`/`rubric.json`, and `_submissions.csv` (status, late, score, per-criterion rubric points) under `canvas_export/` |
-| `grade.py extract` | `extract_text.py` | PDF/DOCX → `_text/<student>.txt` with page and image counts |
+| `grade.py extract` | `extract_text.py` | PDF/DOCX → `_text/<student>.txt`, with Word tables as `\| cell \| cell \|` rows and `[figure ~p4]` / `[chart ~p4]` markers where images sit |
+| `grade.py render` | `render_pages.py` | PNGs of only the pages with figures, tables or Figure/Table captions → `_pages/<student>/p03.png`. Word files need LibreOffice |
 | `grade.py condense` | `condense.py` | Drops boilerplate lines most of the class shares, leaving only what each student wrote. Keeps prompts small for a local model |
 | *(you)* | | Write `<assignment_dir>/_drafts.csv` (format below) |
 | `grade.py post` | `post_grades.py` | Posts rows marked approved. Dry run unless `--send`; `--student <folder>` posts one |
@@ -73,6 +74,26 @@ Canvas replaces the **whole** rubric assessment on save, so a naive post wipes o
 Check whether your assignment uses **manual posting** before sending. With automatic posting, students
 see grades as soon as they land.
 
+## What a text-only model can't see
+
+`extract` turns reports into text, which is enough for written answers but loses anything visual.
+It marks where the gaps are so they don't go unnoticed:
+
+| In the submission | In `_text/` | Check it with |
+|---|---|---|
+| Written answers, captions, references | Full text | Text model |
+| Word tables | `\| cell \| cell \|` rows | Text model |
+| PDF tables | Column-aligned text | Text model (usually fine) |
+| Images, plots, charts | `[figure ...]` / `[chart ...]` marker only | `grade.py render` → you or a local vision model |
+| Charts drawn as vector graphics in PDFs | Nothing (not detectable as images) | `render` still picks the page by its caption |
+| Equations | Raw text, fractions often garbled (`½` → `12`) | `render` |
+| Layout: centering, caption above/below, fonts, spacing | Nothing | `render` |
+
+**Rule of thumb:** before drafting, go through the rubric and mark each row *text* or *visual*. Let a text
+model draft the text rows. Draft the visual rows from the rendered pages, yourself or with a local vision
+model, and spot-check them. Vision models are decent at "is there a labeled histogram with a caption" and
+poor at reading exact values off an axis.
+
 ## Drafting with a local model
 
 `condense.py` output is compact enough to fit a local model's context. A minimal loop with Ollama:
@@ -86,12 +107,19 @@ for s in $(ls canvas_export/*/submissions/<assignment>/_text | sed 's/.txt$//');
 done
 ```
 
+For visual rubric rows, a local vision model can look at the rendered pages:
+
+```sh
+ollama run qwen2.5vl "Does this page have a frequency histogram with labeled axes and a numbered caption \
+below it? Answer yes/no and why. ./canvas_export/<course>/submissions/<assignment>/_pages/<student>/p04.png"
+```
+
 Review every draft yourself before posting. A model's score is a starting point, not a grade.
 
 ## Student data protection
 
 - **Nothing student-related is committed.** `.gitignore` excludes `.env`, `canvas_export/`, `_text/`,
-  `_drafts.csv`, `_posted.log`, `_submissions.csv`, and all PDF/DOCX files.
+  `_drafts.csv`, `_posted.log`, `_submissions.csv`, rendered `_pages/`, and all PDF/DOCX files.
 - **AI coding assistants are told to stay out.** If you open this repo in an AI-enabled editor, these files
   block it from reading student data and your token:
   - `.claude/settings.json`: Claude Code deny rules

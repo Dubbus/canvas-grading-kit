@@ -7,6 +7,7 @@ One entry point for the whole kit. Run with no arguments for help.
     python3 grade.py download    # pick course -> assignments, download submissions + rubrics
     python3 grade.py extract     # pick a downloaded assignment, flatten PDFs/DOCX to _text/
     python3 grade.py condense    # print student-written content only (boilerplate removed)
+    python3 grade.py render      # PNGs of pages with figures/tables, for you or a local vision model
     python3 grade.py post        # dry-run posting _drafts.csv rows marked approved (add --send to post)
 
 Anything after the subcommand is passed through, e.g.
@@ -68,7 +69,7 @@ def check_tools():
     """Return list of (tool, found, hint)."""
     hint = {"darwin": "brew install poppler", "win32": "choco install poppler  (or: scoop install poppler)"} \
         .get(sys.platform, "sudo apt install poppler-utils")
-    return [(t, bool(shutil.which(t)), hint) for t in ("pdftotext", "pdfimages")]
+    return [(t, bool(shutil.which(t)), hint) for t in ("pdftotext", "pdfimages", "pdftoppm")]
 
 
 def print_tools():
@@ -77,7 +78,11 @@ def print_tools():
         print(f"  {'ok ' if found else 'MISSING'}  {tool}" + ("" if found else f"   -> {hint}"))
         ok &= found
     if not ok:
-        print("  (only needed for `extract` on PDF submissions; everything else works without it)")
+        print("  (poppler is only needed for `extract`/`render` on PDFs; everything else works without it)")
+    from render_pages import find_soffice
+    office = find_soffice()
+    print(f"  {'ok ' if office else 'optional'}  LibreOffice" + ("" if office else
+          "   -> only needed to `render` Word files (macOS: brew install --cask libreoffice)"))
 
 
 def assignment_dirs():
@@ -175,6 +180,11 @@ def cmd_condense(args):
     sys.exit(run("condense.py", d, *rest))
 
 
+def cmd_render(args):
+    d, rest = pick_assignment_dir(args)
+    sys.exit(run("render_pages.py", d, *rest))
+
+
 def cmd_post(args):
     d, rest = pick_assignment_dir(args)
     if not (d / "_drafts.csv").is_file():
@@ -185,7 +195,7 @@ def cmd_post(args):
 
 
 COMMANDS = {"setup": cmd_setup, "doctor": cmd_doctor, "download": cmd_download,
-            "extract": cmd_extract, "condense": cmd_condense, "post": cmd_post}
+            "extract": cmd_extract, "condense": cmd_condense, "render": cmd_render, "post": cmd_post}
 
 
 def main():

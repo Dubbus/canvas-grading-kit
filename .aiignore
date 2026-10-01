@@ -2,6 +2,7 @@
 .env
 canvas_export/
 **/_text/
+**/_pages/
 **/_drafts.csv
 **/_posted.log
 **/_submissions.csv
