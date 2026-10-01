@@ -1,0 +1,11 @@
+# secrets
+.env
+# student data: submissions, extracted text, drafts, posting logs
+canvas_export/
+_text/
+_drafts.csv
+_posted.log
+_submissions.csv
+*.pdf
+*.docx
+__pycache__/

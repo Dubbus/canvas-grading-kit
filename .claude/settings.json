@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./canvas_export/**)",
+      "Read(**/_text/**)",
+      "Read(**/_drafts.csv)",
+      "Read(**/_posted.log)",
+      "Read(**/_submissions.csv)",
+      "Read(**/*.pdf)",
+      "Read(**/*.docx)",
+      "Bash(*canvas_export*)",
+      "Bash(*_text/*)",
+      "Bash(*.env*)"
+    ]
+  }
+}

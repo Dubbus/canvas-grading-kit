@@ -1,0 +1,9 @@
+# Student records and secrets: AI assistants must not read these.
+.env
+canvas_export/
+**/_text/
+**/_drafts.csv
+**/_posted.log
+**/_submissions.csv
+*.pdf
+*.docx
